@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -20,6 +21,8 @@ using net.sf.mpxj.mpp;
 using System.Collections.ObjectModel;
 using java.util;
 using System.Collections;
+using java.lang;
+using Salesforce.Force;
 
 namespace TestWPFApp
 {
@@ -72,6 +75,26 @@ namespace TestWPFApp
         private Iterator m_iterator;
     }
 
+    public class Task
+    {
+        public string Id { get; set; }
+        public string name { get; set; }
+        public string pse__Assigned_Resources__c { get; set; }
+    }
+
+    public class Account
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string Description { get; set; }
+    }
+
+    public class Project
+    {
+        public string Id { get; set; }
+        public string name { get; set; }
+    }
+
     public partial class MainWindow : Window
     {
         public MainWindow()
@@ -85,14 +108,59 @@ namespace TestWPFApp
         }
 
         private void Button_Click(object sender, RoutedEventArgs e) {
-            ProjectReader reader = new MPPReader();
-            ProjectFile projectObj = reader.read("G:\\projects\\.NET\\Intergy Project Plan 10-12-19 - AK.mpp");
+            // Empty TextBlock
+            statusBlock.Text ="";
 
-            foreach (net.sf.mpxj.Task task in ToEnumerable(projectObj.getAllTasks()))
+            DirectoryInfo objDirectoryInfo = new DirectoryInfo(@"G:\projects\.NET\MPP");
+            FileInfo[] mppFiles = objDirectoryInfo.GetFiles("*.mpp", SearchOption.AllDirectories);
+
+            foreach (var file in mppFiles)
             {
-                Console.WriteLine("Task: " + task.getName() + " ID=" + task.getID() + " Unique ID=" + task.getUniqueID());
+                ProjectReader reader = new MPPReader();
+                ProjectFile projectObj = reader.read($"{file.FullName}");
+
+                foreach (net.sf.mpxj.Task task in ToEnumerable(projectObj.getAllTasks()))
+                {
+                    //statusBlock.Text = statusBlock.Text +
+                    //    ("Task: " + task.getName() + " ID=" + task.getID() + " Unique ID=" + task.getUniqueID() + "\n");
+
+                    if (task.getID().toString() == "222")
+                    {
+                        Resource r = projectObj.getResourceByUniqueID(task.getUniqueID());
+                        statusBlock.Text = statusBlock.Text + task.getName() + "\n";
+
+                        if (r != null)
+                        {
+                            Console.WriteLine($"{r.getName()}");
+                        }
+                    }
+                }
             }
-            statusBlock.Text = "Hello, Here we are!";
+        }
+
+        private async void Button_Click_1(object sender, RoutedEventArgs e)
+        {
+            var instanceUrl = "https://xxx.salesforce.com/";
+            var accessToken = "xxxxxxxxxxxxxxxxxxxxxxxxxxx";
+            var apiVersion = "v37.0";
+
+            var client = new ForceClient(instanceUrl, accessToken, apiVersion);
+            var projectName = "Intergy Project Plan";
+
+            var projects = await client.QueryAsync<Project>($"SELECT Id, name FROM pse__Proj__c where name like '%{projectName}%'");
+
+            foreach (var project in projects.Records)
+            {
+                Console.WriteLine(project.name);
+            }
+
+            //var tasks = await client.QueryAsync<Task>("SELECT Id, name, pse__Assigned_Resources__c FROM pse__Project_Task__c limit 5");
+
+            //foreach (var task in tasks.Records)
+            //{
+            //    Console.WriteLine(task.name);
+            //}
+
         }
     }
 }

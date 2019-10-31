@@ -9,6 +9,7 @@
     <Grid>
         <TextBlock x:Name="statusBlock" HorizontalAlignment="Left" Margin="76,134,0,0" TextWrapping="Wrap" Text="TextBlock" VerticalAlignment="Top" Height="209" Width="650"/>
         <Button Content="Choose Folder" HorizontalAlignment="Left" Margin="76,47,0,0" VerticalAlignment="Top" Width="98" Click="Button_Click"/>
+        <Button Content="Button" HorizontalAlignment="Left" Margin="260,47,0,0" VerticalAlignment="Top" Width="74" Click="Button_Click_1"/>
 
     </Grid>
 </Window>
