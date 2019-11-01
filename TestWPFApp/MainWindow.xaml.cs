@@ -23,6 +23,7 @@ using java.util;
 using System.Collections;
 using java.lang;
 using Salesforce.Force;
+using System.Globalization;
 
 namespace TestWPFApp
 {
@@ -80,6 +81,8 @@ namespace TestWPFApp
         public string Id { get; set; }
         public string name { get; set; }
         public string pse__Assigned_Resources__c { get; set; }
+       
+        public string Practice_Management_Go_Live_Date__c { get; set; }
     }
 
     public class Account
@@ -93,6 +96,11 @@ namespace TestWPFApp
     {
         public string Id { get; set; }
         public string name { get; set; }
+
+        public string EHR_Actual_Go_Live_Date__c { get; set; }
+        public string Practice_Management_Actual_Go_Live_Date__c { get; set; }
+
+        // public string Practice_Management_Go_Live_Date__c { get; set; }
     }
 
     public partial class MainWindow : Window
@@ -107,7 +115,13 @@ namespace TestWPFApp
             return new EnumerableCollection(javaCollection);
         }
 
-        private void Button_Click(object sender, RoutedEventArgs e) {
+        private async void Button_Click(object sender, RoutedEventArgs e) {
+            var instanceUrl = "https://xxx.salesforce.com/";
+            var accessToken = "xxxxxxxxxxxxxxxxxxxxxxxxxxx";
+            var apiVersion = "v37.0";
+
+            var client = new ForceClient(instanceUrl, accessToken, apiVersion);
+
             // Empty TextBlock
             statusBlock.Text ="";
 
@@ -118,20 +132,45 @@ namespace TestWPFApp
             {
                 ProjectReader reader = new MPPReader();
                 ProjectFile projectObj = reader.read($"{file.FullName}");
+                var projectName = file.Name.Replace(".mpp", "");
 
                 foreach (net.sf.mpxj.Task task in ToEnumerable(projectObj.getAllTasks()))
                 {
-                    //statusBlock.Text = statusBlock.Text +
-                    //    ("Task: " + task.getName() + " ID=" + task.getID() + " Unique ID=" + task.getUniqueID() + "\n");
-
                     if (task.getID().toString() == "222")
                     {
-                        Resource r = projectObj.getResourceByUniqueID(task.getUniqueID());
-                        statusBlock.Text = statusBlock.Text + task.getName() + "\n";
+                        var projects = await client.QueryAsync<Project>($"SELECT Id, Name, EHR_Actual_Go_Live_Date__c FROM pse__Proj__c where Name like 'Baton Rouge Primary Care Collaborative%' limit 1");
 
-                        if (r != null)
+                        foreach (var project in projects.Records)
                         {
-                            Console.WriteLine($"{r.getName()}");
+                            DateTime startDate = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(
+                                task.getStart().getTime()).ToLocalTime();
+                            DateTime endDate = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(
+                                task.getFinish().getTime()).ToLocalTime();
+
+                            var startDataVal = startDate.ToString("yyyy-MM-ddTHH:mm:ss+0000");
+                            var endDataVal = startDate.ToString("yyyy-MM-ddTHH:mm:ss+0000");
+
+                            var updateProject = new Project() { name = project.name,
+                                EHR_Actual_Go_Live_Date__c = startDataVal,
+                                Practice_Management_Actual_Go_Live_Date__c = startDataVal
+                            };
+
+                            var success = await client.UpdateAsync("pse__Proj__c", "a453A000001uEmn", updateProject);
+                            var responseMessage = "is successfully updated!";
+                            if (success.Success == true)
+                            {
+                                responseMessage = "is not updated";
+                            }
+
+                            statusBlock.Text = statusBlock.Text + $"Project: {project.name} {responseMessage} \n";
+
+                            //Resource r = projectObj.getResourceByUniqueID(task.getUniqueID());
+
+                            //if (r != null)
+                            //{
+                            //    Console.WriteLine($"{r.getName()}");
+                            //}
+
                         }
                     }
                 }
@@ -140,8 +179,8 @@ namespace TestWPFApp
 
         private async void Button_Click_1(object sender, RoutedEventArgs e)
         {
-            var instanceUrl = "https://xxx.salesforce.com/";
-            var accessToken = "xxxxxxxxxxxxxxxxxxxxxxxxxxx";
+            var instanceUrl = "https://greenwayhealth.my.salesforce.com/";
+            var accessToken = "00D30000001ICYF!AQ4AQFGI9G3LB87J0Jwi7NA1DzTaFnn1_V.CW4jC4sIRjPb71wnpWffZ6sehZW2xBUotcPODYb4MYbupztO3DAI7nkPg6Z5j";
             var apiVersion = "v37.0";
 
             var client = new ForceClient(instanceUrl, accessToken, apiVersion);
