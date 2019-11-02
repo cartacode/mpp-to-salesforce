@@ -13,6 +13,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Windows.Forms;
 
 using net.sf.mpxj;
 using net.sf.mpxj.reader;
@@ -81,15 +82,7 @@ namespace TestWPFApp
         public string Id { get; set; }
         public string name { get; set; }
         public string pse__Assigned_Resources__c { get; set; }
-       
         public string Practice_Management_Go_Live_Date__c { get; set; }
-    }
-
-    public class Account
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public string Description { get; set; }
     }
 
     public class Project
@@ -105,6 +98,8 @@ namespace TestWPFApp
 
     public partial class MainWindow : Window
     {
+        string MPPFolderPath = "C:";
+
         public MainWindow()
         {
             InitializeComponent();
@@ -116,65 +111,90 @@ namespace TestWPFApp
         }
 
         private async void Button_Click(object sender, RoutedEventArgs e) {
-            var instanceUrl = "https://xxx.salesforce.com/";
-            var accessToken = "xxxxxxxxxxxxxxxxxxxxxxxxxxx";
-            var apiVersion = "v37.0";
+            string instanceUrl = "https://greenwayhealth.my.salesforce.com/";
+            string accessToken = "";
+            string apiVersion = "v37.0";
+            string folderPath = "";
 
-            var client = new ForceClient(instanceUrl, accessToken, apiVersion);
+            ForceClient client = new ForceClient(instanceUrl, accessToken, apiVersion);
 
             // Empty TextBlock
-            statusBlock.Text ="";
+            statusBlock.Text = "";
 
-            DirectoryInfo objDirectoryInfo = new DirectoryInfo(@"G:\projects\.NET\MPP");
-            FileInfo[] mppFiles = objDirectoryInfo.GetFiles("*.mpp", SearchOption.AllDirectories);
-
-            foreach (var file in mppFiles)
+            using (var dialog = new System.Windows.Forms.FolderBrowserDialog())
             {
-                ProjectReader reader = new MPPReader();
-                ProjectFile projectObj = reader.read($"{file.FullName}");
-                var projectName = file.Name.Replace(".mpp", "");
+                dialog.SelectedPath = Properties.Settings.Default.MPPFolderPath;
+                System.Windows.Forms.DialogResult result = dialog.ShowDialog();
+                folderPath = dialog.SelectedPath;
+                Properties.Settings.Default.MPPFolderPath = dialog.SelectedPath;
+                Properties.Settings.Default.Save();
+            }
 
-                foreach (net.sf.mpxj.Task task in ToEnumerable(projectObj.getAllTasks()))
+            DirectoryInfo objDirectoryInfo = new DirectoryInfo(folderPath);
+            FileInfo[] mppFiles = objDirectoryInfo.GetFiles("*.mpp", SearchOption.TopDirectoryOnly);
+
+            if (mppFiles.Length == 0)
+            {
+                System.Windows.MessageBox.Show("There are no MPP files");
+            }
+            else
+            {
+                // Read mpp files
+                foreach (var file in mppFiles)
                 {
-                    if (task.getID().toString() == "222")
+                    ProjectReader reader = new MPPReader();
+                    ProjectFile projectObj = reader.read($"{file.FullName}");
+                    var projectName = file.Name.Replace(".mpp", "");
+
+                    // Get Tasks from MPP file
+                    foreach (net.sf.mpxj.Task task in ToEnumerable(projectObj.getAllTasks()))
                     {
-                        var projects = await client.QueryAsync<Project>($"SELECT Id, Name, EHR_Actual_Go_Live_Date__c FROM pse__Proj__c where Name like 'Baton Rouge Primary Care Collaborative%' limit 1");
-
-                        foreach (var project in projects.Records)
+                        // Filter tasks to be updated
+                        if (task.getID().toString() == "222")
                         {
-                            DateTime startDate = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(
-                                task.getStart().getTime()).ToLocalTime();
-                            DateTime endDate = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(
-                                task.getFinish().getTime()).ToLocalTime();
+                            var projects = await client.QueryAsync<Project>(
+                                $"SELECT Id, Name, EHR_Actual_Go_Live_Date__c FROM pse__Proj__c where Name like 'Baton Rouge Primary Care Collaborative%' limit 1");
 
-                            var startDataVal = startDate.ToString("yyyy-MM-ddTHH:mm:ss+0000");
-                            var endDataVal = startDate.ToString("yyyy-MM-ddTHH:mm:ss+0000");
-
-                            var updateProject = new Project() { name = project.name,
-                                EHR_Actual_Go_Live_Date__c = startDataVal,
-                                Practice_Management_Actual_Go_Live_Date__c = startDataVal
-                            };
-
-                            var success = await client.UpdateAsync("pse__Proj__c", "a453A000001uEmn", updateProject);
-                            var responseMessage = "is successfully updated!";
-                            if (success.Success == true)
+                            foreach (var project in projects.Records)
                             {
-                                responseMessage = "is not updated";
+                                DateTime startDate = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(
+                                    task.getStart().getTime()).ToLocalTime();
+                                DateTime endDate = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(
+                                    task.getFinish().getTime()).ToLocalTime();
+
+                                string startDataVal = startDate.ToString("yyyy-MM-ddTHH:mm:ss+0000");
+                                string endDataVal = startDate.ToString("yyyy-MM-ddTHH:mm:ss+0000");
+
+                                var updateProject = new Project()
+                                {
+                                    name = project.name,
+                                    EHR_Actual_Go_Live_Date__c = startDataVal,
+                                    Practice_Management_Actual_Go_Live_Date__c = startDataVal
+                                };
+
+                                var success = await client.UpdateAsync("pse__Proj__c", project.Id, updateProject);
+                                var responseMessage = "is successfully updated!";
+                                if (success.Success == true)
+                                {
+                                    responseMessage = "is not updated";
+                                }
+
+                                statusBlock.Text = statusBlock.Text + $"Project: {project.name} # " +
+                                    $"Task: {task.getID().toString()} {responseMessage} \n";
+
+                                //Resource r = projectObj.getResourceByUniqueID(task.getUniqueID());
+
+                                //if (r != null)
+                                //{
+                                //    Console.WriteLine($"{r.getName()}");
+                                //}
+
                             }
-
-                            statusBlock.Text = statusBlock.Text + $"Project: {project.name} {responseMessage} \n";
-
-                            //Resource r = projectObj.getResourceByUniqueID(task.getUniqueID());
-
-                            //if (r != null)
-                            //{
-                            //    Console.WriteLine($"{r.getName()}");
-                            //}
-
                         }
                     }
                 }
             }
+
         }
 
         private async void Button_Click_1(object sender, RoutedEventArgs e)
@@ -182,16 +202,17 @@ namespace TestWPFApp
             var instanceUrl = "https://greenwayhealth.my.salesforce.com/";
             var accessToken = "00D30000001ICYF!AQ4AQFGI9G3LB87J0Jwi7NA1DzTaFnn1_V.CW4jC4sIRjPb71wnpWffZ6sehZW2xBUotcPODYb4MYbupztO3DAI7nkPg6Z5j";
             var apiVersion = "v37.0";
+            statusBlock.Text = "";
 
-            var client = new ForceClient(instanceUrl, accessToken, apiVersion);
-            var projectName = "Intergy Project Plan";
+            //var client = new ForceClient(instanceUrl, accessToken, apiVersion);
+            //var projectName = "Intergy Project Plan";
 
-            var projects = await client.QueryAsync<Project>($"SELECT Id, name FROM pse__Proj__c where name like '%{projectName}%'");
+            //var projects = await client.QueryAsync<Project>($"SELECT Id, name FROM pse__Proj__c where name like '%{projectName}%'");
 
-            foreach (var project in projects.Records)
-            {
-                Console.WriteLine(project.name);
-            }
+            //foreach (var project in projects.Records)
+            //{
+            //    Console.WriteLine(project.name);
+            //}
 
             //var tasks = await client.QueryAsync<Task>("SELECT Id, name, pse__Assigned_Resources__c FROM pse__Project_Task__c limit 5");
 
